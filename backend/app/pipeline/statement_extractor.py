@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract evidence-backed financial-statement tables from PDFs."""
+"""Extract evidence-backed financial-statement tables from PDFs final."""
 import argparse,json,logging,os,re,shutil
 from dataclasses import dataclass,asdict,field
 from pathlib import Path
@@ -19,7 +19,11 @@ except Exception as exc:
 
 ROOT=Path(__file__).resolve().parent
 TESTS_ROOT=ROOT.parents[2]/"backend/tests"
-NAMES={"CashFlow":("cash flow","cash-flow"),"Balance Sheet":("balance sheet","financial position"),"IncomeStatement":("income statement","profit and loss","statement of operations")}
+
+NAMES={
+    "CashFlow":("cash flow","cash-flow"),
+    "Balance Sheet":("balance sheet","financial position"),
+    "IncomeStatement":("income statement","profit and loss","statement of operations")}
 @dataclass
 class Statement:
     name:str; found:bool=False; source_pages:list[int]=field(default_factory=list); currency_and_scale:str|None=None; rows:list[list[str]]=field(default_factory=list); footnotes:list[str]=field(default_factory=list); warnings:list[str]=field(default_factory=list)
@@ -108,7 +112,7 @@ class Writer:
 def main():
     p=argparse.ArgumentParser(); p.add_argument("--input-file",type=Path); p.add_argument("--input-dir",type=Path,default=TESTS_ROOT/"inputs"); p.add_argument("--output-dir",type=Path,default=TESTS_ROOT/"outputs"); p.add_argument("--model",default="google/gemini-2.5-flash"); p.add_argument("--ocr-mode",choices=("auto","off","required"),default="auto"); p.add_argument("--no-openrouter",action="store_true"); a=p.parse_args()
     files=[a.input_file] if a.input_file else sorted(a.input_dir.glob("*.pdf"))
-    if not files: raise SystemExit("No PDFs found.")
+    if not files: raise SystemExit("No PDFs found...")
     for pdf in files:
         doc,pages=EvidenceReader(a.ocr_mode).read(pdf)
         try:
