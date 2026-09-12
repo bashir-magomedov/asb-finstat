@@ -391,11 +391,30 @@ input:disabled {
   animation: spin 0.7s linear infinite;
 }
 
-.hint.error {
+.hint {
   margin-top: 0.4rem;
-  color: var(--err);
+  color: var(--muted);
   font-size: 0.85rem;
 }
+
+.hint.error { color: var(--err); }
+
+.company-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.company-source { font-size: 0.75rem; color: var(--muted); }
+.source-link { flex-shrink: 0; font-size: 0.75rem; }
 
 .suggestions {
   position: absolute;
@@ -440,6 +459,8 @@ input:disabled {
 .suggestions .text {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .suggestions .text span {

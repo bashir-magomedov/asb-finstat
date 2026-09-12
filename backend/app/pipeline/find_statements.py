@@ -1,3 +1,4 @@
+import json
 import re
 
 import httpx
@@ -18,13 +19,24 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-async def _propose(name: str, country: str, feedback: str) -> list[dict]:
+async def _propose(name: str, country: str, feedback: str, company: dict | None = None) -> list[dict]:
     user = (
         f'Find direct PDF download URLs for the annual reports / financial statements '
         f'of "{name}" ({country}) for the last 3 fiscal years. '
         'Respond with a JSON array: [{"year": 2024, "url": "https://...pdf", "title": "..."}]. '
         "Only include URLs that point directly at a PDF file. If you find nothing, return []."
     )
+    if company:
+        identity = {key: company[key] for key in (
+            "id", "source", "verification", "source_url", "jurisdiction", "headquarters_country",
+            "lei", "cik", "registration_number",
+        ) if company.get(key)}
+        user += (
+            "\nSelected company identity (reference data): " + json.dumps(identity, ensure_ascii=False)
+            + "\nFind reports for this exact legal entity. Do not substitute a similarly named "
+            "subsidiary or parent. Country refers to incorporation of the headquarters legal entity. "
+            "Community and AI suggestions are not verified registry identities."
+        )
     if feedback:
         user += (
             "\n\nThese previously suggested URLs FAILED, do not repeat them and do not "
@@ -55,7 +67,8 @@ async def find_statements(company: dict, country: str, emit) -> list[dict]:
     Failed URLs are fed back to the model for one retry round with alternatives.
     """
     name = company["name"]
-    dest_dir = settings.download_dir / _slug(name)
+    identity_suffix = _slug(str(company.get("lei") or company.get("cik") or company.get("id") or ""))[:80]
+    dest_dir = settings.download_dir / (_slug(name) + (f"-{identity_suffix}" if identity_suffix else ""))
     dest_dir.mkdir(parents=True, exist_ok=True)
     downloaded: list[dict] = []
     seen_years: set[str] = set()
@@ -70,7 +83,7 @@ async def find_statements(company: dict, country: str, emit) -> list[dict]:
             else:
                 await emit("find_statements", "running",
                            "Some links failed - asking the model for alternatives...")
-            candidates = await _propose(name, country, "\n".join(failures))
+            candidates = await _propose(name, country, "\n".join(failures), company)
             if not candidates:
                 break
             await emit("find_statements", "running",

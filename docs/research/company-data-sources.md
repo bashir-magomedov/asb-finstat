@@ -1,6 +1,6 @@
 # Free company data sources
 
-Research date: 2026-09-12. Official documentation reviewed; no integration implemented. No existing research-note directory was present, so this note establishes `docs/research/`.
+Research date: 2026-09-12. Official documentation reviewed. GLEIF, Wikidata and optional US SEC adapters are now implemented, with AI as the final fallback. Companies House and OpenCorporates remain future additions. See the root README for setup and limits.
 
 ## Recommendation for this project
 
@@ -10,7 +10,7 @@ User clarification: country means where the headquarters is incorporated. Workin
 
 Initial setup can use GLEIF and Wikidata without new API keys, plus SEC public data APIs where relevant. Retain the existing OpenRouter key for AI fallback. Companies House requires a developer account and API key; OpenCorporates requires a key and eligible access terms. GLEIF explicitly documents free access without registration. [GLEIF access](https://www.gleif.org/en/newsroom/blog/lei-look-up-api-gleif-answers-financial-industry-calls-to-enable-faster-customized-and-automated-access-to-the-legal-entity-identifier-data-pool), [Wikidata access](https://www.wikidata.org/wiki/Wikidata:Data_access). See provider sections below for other access requirements.
 
-Separate discovery (finding possible companies) from validation (matching a specific legal entity and its recorded jurisdiction). Store provider, stable identifier, legal name, jurisdiction, headquarters country, record status, source URL and retrieval date. Pass the selected identity through the financial-report pipeline instead of only its display name. Cache searches, distinguish provider failures from empty results, and allow an explicitly unverified manual entry when coverage is missing. A missing match does not establish that a company does not exist; finding its identity does not establish that public financial statements are available. These are proposed design choices, not implemented behavior.
+The implementation separates discovery candidates from legal-entity source records, retains identifiers and provenance, passes the selected identity through the financial-report pipeline, caches searches and distinguishes provider failures from empty results. A manual-entry option remains a possible future addition. A missing match does not establish that a company does not exist; finding its identity does not establish that public financial statements are available.
 
 ## GLEIF: global legal entities with LEIs
 
@@ -20,7 +20,7 @@ Keep legal jurisdiction, legal-address country and headquarters-address country 
 
 For a larger local index, Golden Copy files are published three times daily with delta files. [Downloads](https://www.gleif.org/en/lei-data/gleif-golden-copy/download-the-golden-copy).
 
-Validation status: documentation verified; a live unauthenticated request from the development shell failed on network access, and the web tool could not open the JSON response. No successful runtime integration check was completed.
+Integration findings: live unauthenticated GLEIF requests succeeded after enabling network access for the checks. Country-filtered name lookup is combined with fulltext autocomplete when necessary. Autocomplete ignores country filters and only returns a small global candidate set; suggested LEIs must be resolved and checked locally. Name filters match words, so short prefixes may need another provider. Wikidata returned HTTP 403 from the development environment during Python checks; the application treats that as provider unavailability and advances to AI. Automated adapter tests use mocked HTTP responses.
 
 ## Wikidata: global discovery and enrichment
 

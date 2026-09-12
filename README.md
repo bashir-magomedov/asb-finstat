@@ -7,6 +7,45 @@ financial statements — streaming every step live over a websocket.
 
 Everything runs locally on one laptop. No hosting, no DB, no infra.
 
+## Company lookup
+
+Company suggestions use **GLEIF → optional SEC EDGAR (US) → Wikidata → AI**.
+The first source with usable records wins. Empty results, timeouts and provider
+errors advance to the next source; AI remains the last resort.
+
+- GLEIF and Wikidata require no accounts or API keys. GLEIF checks the selected
+  legal entity's incorporation jurisdiction, including subdivisions such as
+  `US-DE`. Its headquarters address is stored separately. This does not infer
+  whether the entity is a group's ultimate parent; choose the intended entity.
+- GLEIF returns active general entities with matching names/aliases. Funds,
+  branches, inactive entities and duplicate/annulled/retired LEIs are excluded.
+  A lapsed LEI is still searchable, with an overdue-renewal label.
+- Wikidata supplies business-entity candidates with current country statements.
+  These are labelled community data, with incorporation unverified. AI-only
+  suggestions are explicitly labelled unverified and never receive invented IDs
+  from a registry or source links.
+- SEC is optional: set `SEC_USER_AGENT=ASB Finstat your-real-email@example.com`
+  in `backend/.env` to identify requests under its fair-access policy. No SEC
+  registration or API key is required. Its US adapter checks incorporation in
+  a US state/DC, not the exchange listing or business address. Foreign filers
+  and missing/unknown incorporation codes do not count as US matches.
+- Companies House and OpenCorporates are not connected in this version.
+
+Each suggestion retains its provider, identifier, source URL, country evidence
+and retrieval time. The selected identity is passed to the financial-report
+search. Finding a company does not guarantee public financial statements exist.
+
+Searches are debounced and superseded requests are cancelled. Successful public
+results are cached in memory for 10 minutes; AI/empty results for one minute.
+Results following provider failures are not cached. Public sources have an
+8-second deadline each; AI fallback has a 25-second deadline. Provider outages
+are shown separately from an empty result. Try a longer name if a short prefix
+has poor coverage; no source here is a complete worldwide company directory.
+
+Implementation: `backend/app/company_sources.py` and
+`backend/app/pipeline/company_search.py`. Source research:
+[`docs/research/company-data-sources.md`](docs/research/company-data-sources.md).
+
 ## The 5 AI calls
 
 Every AI call goes through OpenRouter (`backend/app/openrouter.py`) and each one has
@@ -14,14 +53,14 @@ its own model, configurable via `backend/.env` (defaults in `backend/app/config.
 
 | # | Step             | File                                     | Model env var          | Owner  |
 |---|------------------|------------------------------------------|------------------------|--------|
-| 1 | Company typeahead| `backend/app/pipeline/company_search.py` | `MODEL_COMPANY_SEARCH` | —      |
+| 1 | Company typeahead (last-resort fallback)| `backend/app/pipeline/company_search.py` | `MODEL_COMPANY_SEARCH` | —      |
 | 2 | Find + download statement PDFs | `backend/app/pipeline/find_statements.py` | `MODEL_FIND_STATEMENTS` | — |
 | 3 | Language check   | `backend/app/pipeline/language_check.py` (**stub**) | `MODEL_LANGUAGE_CHECK` | **Adel** |
 | 4 | Translate to English | `backend/app/pipeline/translate.py` (**stub**) | `MODEL_TRANSLATE` | **Adel** |
 | 5 | Extract financial statements | `backend/app/pipeline/extract.py` (**stub**) | `MODEL_EXTRACT` | **Sophie** |
 
 Steps 2–5 are orchestrated by `backend/app/pipeline/runner.py`. Downloaded PDFs land
-in `backend/data/downloads/<company-slug>/` (git-ignored).
+in `backend/data/downloads/<company-slug>-<identity>/` (git-ignored).
 
 ## Quickstart
 
@@ -54,7 +93,9 @@ Open http://localhost:5173. Vite proxies `/ws` to the backend on port 8000.
 Client → server:
 
 ```jsonc
-{ "type": "search_companies", "country": "Germany", "query": "sie", "requestId": 3 }
+{ "type": "search_companies", "country": "Germany", "countryCode": "de", "query": "sie", "requestId": 3 }
+{ "type": "cancel_search" }
+// Send the complete selected company object, including its identity/source fields.
 { "type": "run_pipeline", "country": "Germany", "company": { "name": "Siemens AG" } }
 ```
 
@@ -62,7 +103,7 @@ Server → client:
 
 ```jsonc
 // typeahead results (echoes requestId so stale responses are dropped)
-{ "type": "companies", "requestId": 3, "companies": [{ "name": "...", "description": "..." }] }
+{ "type": "companies", "requestId": 3, "companies": [{ "id": "gleif:...", "name": "...", "source": "GLEIF", "verification": "source_record", "country_code": "DE", "jurisdiction": "DE", "source_url": "https://search.gleif.org/#/record/...", "retrieved_at": "..." }], "warnings": [] }
 
 // live progress — one event per state change, rendered as the activity feed
 { "type": "step_update", "step": "find_statements", "status": "running", "message": "...", "data": null }
@@ -72,6 +113,19 @@ Server → client:
 `status` is `running | done | error | skipped`. The final event is
 `step: "pipeline", status: "done"` with `data.results` containing per-file
 `{year, file, language, statements}`.
+The same final event retains the selected identity as `data.company`.
+
+## Checks
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+cd ../frontend
+npx tsc --noEmit
+npm run build
+```
+
+Backend tests use mocked HTTP responses and do not require keys or spend AI credits.
 
 ## Plugging in your step (Adel / Sophie)
 

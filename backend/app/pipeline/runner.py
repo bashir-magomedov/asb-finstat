@@ -32,7 +32,7 @@ async def run_pipeline(company: dict, country: str, emit) -> None:
             })
 
         await emit("pipeline", "done", f"Processed {len(results)} statement(s) for {name}",
-                   {"results": results})
+                   {"company": company, "results": results})
     except asyncio.CancelledError:
         raise
     except Exception as e:

@@ -1,7 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { COUNTRIES, flagUrl, type Country } from './countries'
 
-type Company = { name: string; description?: string }
+type Company = {
+  id: string
+  name: string
+  description?: string
+  source: 'GLEIF' | 'SEC EDGAR' | 'Wikidata' | 'AI'
+  verification: 'source_record' | 'community' | 'unverified'
+  country_code: string
+  source_url?: string | null
+  jurisdiction?: string | null
+  headquarters_country?: string | null
+  lei?: string | null
+  cik?: string | null
+  lei_status?: string | null
+}
+
+function companySource(company: Company) {
+  if (company.verification === 'unverified') return 'AI suggestion · Unverified'
+  if (company.verification === 'community') return 'Wikidata · Community data; incorporation unverified'
+  return `${company.source} · Incorporation recorded${company.lei_status === 'LAPSED' ? ' · LEI renewal overdue' : ''}`
+}
 type StepUpdate = {
   type: 'step_update'
   step: string
@@ -9,7 +28,7 @@ type StepUpdate = {
   message: string
   data?: unknown
 }
-type CompaniesMsg = { type: 'companies'; requestId: number; companies: Company[]; error?: string }
+type CompaniesMsg = { type: 'companies'; requestId: number; companies: Company[]; error?: string; warnings?: string[] }
 type ServerMessage = StepUpdate | CompaniesMsg
 
 const STEP_LABELS: Record<string, string> = {
@@ -159,6 +178,8 @@ export default function App() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [searchWarnings, setSearchWarnings] = useState<string[]>([])
+  const [searchComplete, setSearchComplete] = useState(false)
   const [selected, setSelected] = useState<Company | null>(null)
   const [events, setEvents] = useState<StepUpdate[]>([])
   const wsRef = useRef<WebSocket | null>(null)
@@ -173,7 +194,10 @@ export default function App() {
       wsRef.current = ws
       ws.onopen = () => setConnected(true)
       ws.onclose = () => {
+        if (wsRef.current !== ws || closed) return
         setConnected(false)
+        requestId.current++
+        setSearching(false)
         if (!closed) setTimeout(connect, 1000)
       }
       ws.onmessage = (e) => {
@@ -182,6 +206,8 @@ export default function App() {
           if (msg.requestId === requestId.current) {
             setCompanies(msg.companies)
             setSearchError(msg.error ?? '')
+            setSearchWarnings(msg.warnings ?? [])
+            setSearchComplete(true)
             setSearching(false)
           }
         } else if (msg.type === 'step_update') {
@@ -196,23 +222,30 @@ export default function App() {
     }
   }, [])
 
-  // AI call #1: debounced typeahead once 2+ characters are typed
+  // Public sources first, with AI as the last fallback. Invalidate responses
+  // immediately, including when the query becomes too short or country changes.
   useEffect(() => {
-    if (!country || query.trim().length < 2 || selected) {
-      setCompanies([])
-      setSearching(false)
+    const id = ++requestId.current
+    setCompanies([])
+    setSearchError('')
+    setSearchWarnings([])
+    setSearchComplete(false)
+    setSearching(false)
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'cancel_search' }))
+    }
+    if (!connected || !country || query.trim().length < 2 || selected) {
       return
     }
     const t = setTimeout(() => {
-      const id = ++requestId.current
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return
       setSearching(true)
-      setSearchError('')
-      wsRef.current?.send(
-        JSON.stringify({ type: 'search_companies', country: country.name, query: query.trim(), requestId: id }),
+      wsRef.current.send(
+        JSON.stringify({ type: 'search_companies', country: country.name, countryCode: country.code, query: query.trim(), requestId: id }),
       )
     }, 300)
     return () => clearTimeout(t)
-  }, [country, query, selected])
+  }, [country, query, selected, connected])
 
   useEffect(() => {
     if (events.length === 0) return
@@ -221,7 +254,8 @@ export default function App() {
   }, [events])
 
   const selectCompany = (c: Company) => {
-    if (!country) return
+    if (!country || wsRef.current?.readyState !== WebSocket.OPEN) return
+    requestId.current++
     setSelected(c)
     setCompanies([])
     setQuery(c.name)
@@ -255,10 +289,11 @@ export default function App() {
 
       <section className="card controls">
         <div className="fieldgroup">
-          <span className="caption">Country</span>
+          <span className="caption" title="Country where the headquarters legal entity is incorporated">Country of incorporation</span>
           <CountrySelect
             value={country}
             onChange={(c) => {
+              requestId.current++
               setCountry(c)
               setSelected(null)
               setQuery('')
@@ -273,24 +308,34 @@ export default function App() {
           <div className="typeahead">
             <input
               value={query}
+              maxLength={100}
               disabled={!country}
               placeholder={country ? 'Start typing a company name (2+ chars)…' : 'Pick a country first'}
               onChange={(e) => {
+                requestId.current++
                 setQuery(e.target.value)
                 setSelected(null)
               }}
             />
             {searching && <span className="spinner" />}
             {searchError && <div className="hint error">{searchError}</div>}
+            {searchWarnings.map((warning) => <div className="hint" key={warning}>{warning}</div>)}
+            {searchComplete && !searching && !searchError && companies.length === 0 && (
+              <div className="hint">No suggestions found. Try a longer name or another spelling.</div>
+            )}
             {companies.length > 0 && (
               <ul className="suggestions">
                 {companies.map((c) => (
-                  <li key={c.name} onClick={() => selectCompany(c)}>
-                    <span className="avatar">{c.name[0]}</span>
-                    <span className="text">
-                      <strong>{c.name}</strong>
-                      {c.description && <span>{c.description}</span>}
-                    </span>
+                  <li key={c.id}>
+                    <button type="button" className="company-option" onClick={() => selectCompany(c)}>
+                      <span className="avatar">{c.name[0]}</span>
+                      <span className="text">
+                        <strong>{c.name}</strong>
+                        {c.description && <span>{c.description}</span>}
+                        <span className="company-source">{companySource(c)}</span>
+                      </span>
+                    </button>
+                    {c.source_url && <a className="source-link" href={c.source_url} target="_blank" rel="noreferrer">Source</a>}
                   </li>
                 ))}
               </ul>
@@ -306,6 +351,10 @@ export default function App() {
             {selected.name}
             <span className="sub">agent activity</span>
           </h2>
+          <p className="hint">
+            {companySource(selected)}
+            {selected.source_url && <> · <a href={selected.source_url} target="_blank" rel="noreferrer">View source</a></>}
+          </p>
           <ol>
             {events.map((e, i) => {
               const settled =

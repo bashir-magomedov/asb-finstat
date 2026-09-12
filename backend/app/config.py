@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # Optional SEC access: app name and real contact email; no API key required.
+    sec_user_agent: str = ""
+
     # One model knob per AI call — override any of these in backend/.env
     model_company_search: str = "openai/gpt-4o-mini"       # AI call #1
     model_find_statements: str = "perplexity/sonar"        # AI call #2 (needs web search)
