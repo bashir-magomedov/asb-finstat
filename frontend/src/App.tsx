@@ -27,6 +27,55 @@ const STATUS_ICONS: Record<StepUpdate['status'], string> = {
   skipped: '○',
 }
 
+type Mood = 'happy' | 'sad' | 'busy' | 'curious'
+
+const MOOD_LABELS: Record<Mood, string> = {
+  happy: 'connected',
+  sad: 'disconnected',
+  busy: 'working…',
+  curious: 'searching…',
+}
+
+function Robot({ mood }: { mood: Mood }) {
+  return (
+    <svg className={`robot ${mood}`} viewBox="0 0 72 84" width="200" height="233" aria-hidden="true">
+      <defs>
+        <clipPath id="visor">
+          <rect x="21" y="13" width="30" height="16" rx="5" />
+        </clipPath>
+      </defs>
+      <g className="head">
+        <line x1="36" y1="4" x2="36" y2="9" stroke="#dde3f0" strokeWidth="2" />
+        <circle className="antenna-tip" cx="36" cy="3" r="2.4" />
+        <rect x="12.5" y="16" width="4" height="12" rx="2" fill="#dde3f0" />
+        <rect x="55.5" y="16" width="4" height="12" rx="2" fill="#dde3f0" />
+        <rect x="16" y="8" width="40" height="26" rx="8" fill="#eef1f8" />
+        <rect x="21" y="13" width="30" height="16" rx="5" fill="#0c0f16" />
+        <g className="eyes" clipPath="url(#visor)">
+          <g className="eye-group left">
+            <rect className="eye" x="26.5" y="16" width="7" height="10" rx="2.5" />
+            <path className="smile" d="M26 24.5 Q30 18 34 24.5" />
+          </g>
+          <g className="eye-group right">
+            <rect className="eye" x="38.5" y="16" width="7" height="10" rx="2.5" />
+            <path className="smile" d="M38 24.5 Q42 18 46 24.5" />
+          </g>
+        </g>
+      </g>
+      <g className="body">
+        <rect className="arm left" x="13" y="46" width="5" height="16" rx="2.5" fill="#dde3f0" />
+        <rect className="arm right" x="54" y="46" width="5" height="16" rx="2.5" fill="#dde3f0" />
+        <path
+          d="M26 40 L46 40 L52 48 L52 66 Q52 70 48 70 L24 70 Q20 70 20 66 L20 48 Z"
+          fill="#eef1f8"
+        />
+        <rect className="chest" x="30" y="47" width="12" height="6" rx="2" />
+        <line x1="22" y1="60" x2="50" y2="60" stroke="#d3dae8" strokeWidth="1.5" />
+      </g>
+    </svg>
+  )
+}
+
 function Flag({ code, className }: { code: string; className?: string }) {
   return (
     <img
@@ -114,7 +163,6 @@ export default function App() {
   const [events, setEvents] = useState<StepUpdate[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const requestId = useRef(0)
-  const feedEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let ws: WebSocket
@@ -167,7 +215,8 @@ export default function App() {
   }, [country, query, selected])
 
   useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    if (events.length === 0) return
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
   }, [events])
 
   const selectCompany = (c: Company) => {
@@ -179,6 +228,11 @@ export default function App() {
     wsRef.current?.send(JSON.stringify({ type: 'run_pipeline', country: country.name, company: c }))
   }
 
+  const pipelineActive =
+    events.length > 0 &&
+    !events.some((e) => e.step === 'pipeline' && (e.status === 'done' || e.status === 'error'))
+  const mood: Mood = !connected ? 'sad' : searching ? 'curious' : pipelineActive ? 'busy' : 'happy'
+
   return (
     <div className="app">
       <header>
@@ -189,11 +243,12 @@ export default function App() {
             <span className="team">team Friendly Strangers</span>
           </div>
         </div>
-        <span className={`conn ${connected ? 'on' : 'off'}`}>
-          <span className="dot" />
-          {connected ? 'connected' : 'reconnecting…'}
-        </span>
       </header>
+
+      <div className="robot-dock">
+        <Robot mood={mood} />
+        <span className="status-label">{MOOD_LABELS[mood]}</span>
+      </div>
 
       <section className="card controls">
         <div className="fieldgroup">
@@ -257,7 +312,6 @@ export default function App() {
               </li>
             ))}
           </ol>
-          <div ref={feedEndRef} />
         </section>
       )}
     </div>

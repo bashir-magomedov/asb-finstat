@@ -72,26 +72,159 @@ header {
   font-size: 0.82rem;
 }
 
-.conn {
+/* ---------- robot companion ---------- */
+
+.robot-dock {
+  position: fixed;
+  right: max(20px, calc(50vw - 380px - 260px));
+  bottom: 22px;
+  z-index: 50;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.82rem;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+.status-label {
+  font-size: 0.85rem;
   color: var(--muted);
-  padding: 0.35rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-.conn .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+@media (max-width: 900px) {
+  .robot-dock {
+    right: 10px;
+    bottom: 10px;
+    transform: scale(0.6);
+    transform-origin: bottom right;
+  }
 }
 
-.conn.on .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
-.conn.off .dot { background: var(--err); box-shadow: 0 0 8px var(--err); }
+.robot {
+  overflow: visible;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
+}
+
+.robot * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.robot .eye {
+  fill: #57b6ff;
+  filter: drop-shadow(0 0 4px rgba(87, 182, 255, 0.9));
+  transition: fill 0.3s, transform 0.3s, opacity 0.3s;
+}
+
+.robot .smile {
+  fill: none;
+  stroke: #57b6ff;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(87, 182, 255, 0.9));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.robot .chest,
+.robot .antenna-tip {
+  fill: #57b6ff;
+  opacity: 0.85;
+  transition: fill 0.3s;
+}
+
+.robot .head,
+.robot .body {
+  transition: transform 0.4s;
+}
+
+/* happy (connected, idle): smiling crescent eyes, gentle bob, occasional peek */
+.robot.happy { animation: bob 3.6s ease-in-out infinite; }
+.robot.happy .eye { opacity: 0; }
+.robot.happy .smile { opacity: 1; }
+.robot.happy .head { animation: peek 9s ease-in-out infinite; }
+
+/* curious (searching): eyes darting around, head tilting */
+.robot.curious { animation: bob 2.4s ease-in-out infinite; }
+.robot.curious .eyes { animation: dart 1.6s ease-in-out infinite; }
+.robot.curious .eye { animation: blink 4s infinite; }
+.robot.curious .head { animation: tilthead 3s ease-in-out infinite; }
+
+/* busy (pipeline running): scanning eyes, faster bob, flapping arms, pulsing chest */
+.robot.busy { animation: bob 1.5s ease-in-out infinite; }
+.robot.busy .eyes { animation: scan 2s ease-in-out infinite; }
+.robot.busy .eye { animation: blink 3.4s infinite; }
+.robot.busy .arm.left { animation: flap-l 1.5s ease-in-out infinite; }
+.robot.busy .arm.right { animation: flap-r 1.5s ease-in-out infinite; }
+.robot.busy .chest,
+.robot.busy .antenna-tip { animation: chest-pulse 1.2s ease-in-out infinite; }
+
+/* sad (disconnected): gray droopy eyes, drooped head, no motion */
+.robot.sad .eye,
+.robot.sad .chest,
+.robot.sad .antenna-tip {
+  fill: #8a93a8;
+  filter: none;
+}
+
+.robot.sad .head { transform: translateY(3px); }
+.robot.sad .eye-group.left .eye { transform: rotate(-16deg) scaleY(0.55) translateY(1.5px); }
+.robot.sad .eye-group.right .eye { transform: rotate(16deg) scaleY(0.55) translateY(1.5px); }
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes peek {
+  0%, 55%, 82%, 100% { transform: rotate(0); }
+  62% { transform: rotate(-8deg); }
+  72% { transform: rotate(6deg); }
+}
+
+@keyframes blink {
+  0%, 92%, 96%, 100% { transform: scaleY(1); }
+  94% { transform: scaleY(0.08); }
+}
+
+@keyframes scan {
+  0%, 100% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+}
+
+@keyframes dart {
+  0%, 18%, 100% { transform: translateX(0); }
+  28%, 44% { transform: translateX(-3.5px); }
+  58%, 80% { transform: translateX(3.5px); }
+}
+
+@keyframes tilthead {
+  0%, 100% { transform: rotate(0); }
+  40% { transform: rotate(-7deg); }
+  72% { transform: rotate(4deg); }
+}
+
+@keyframes flap-l {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(-20deg); }
+}
+
+@keyframes flap-r {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(20deg); }
+}
+
+@keyframes chest-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes ripple {
+  0% { box-shadow: 0 0 0 0 rgba(210, 153, 34, 0.4); }
+  100% { box-shadow: 0 0 0 14px rgba(210, 153, 34, 0); }
+}
 
 /* ---------- cards & fields ---------- */
 
@@ -337,8 +470,8 @@ input:disabled {
 
 .event {
   display: flex;
-  gap: 0.7rem;
-  align-items: baseline;
+  gap: 0.8rem;
+  align-items: center;
   padding: 0.55rem 0.75rem;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -349,15 +482,37 @@ input:disabled {
 
 .event .icon {
   flex-shrink: 0;
-  width: 1.1em;
-  text-align: center;
-  font-size: 0.85rem;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 1.05rem;
+  font-weight: 800;
 }
 
-.event.running .icon { color: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
-.event.done .icon { color: var(--ok); }
-.event.error .icon { color: var(--err); }
-.event.skipped .icon { color: var(--muted); }
+.event.running .icon {
+  color: var(--warn);
+  background: rgba(210, 153, 34, 0.14);
+  animation: pulse 1.2s ease-in-out infinite, ripple 1.4s ease-out infinite;
+}
+
+.event.done .icon {
+  color: #fff;
+  background: var(--ok);
+  box-shadow: 0 0 14px rgba(63, 185, 80, 0.45);
+}
+
+.event.error .icon {
+  color: #fff;
+  background: var(--err);
+  box-shadow: 0 0 14px rgba(248, 81, 73, 0.45);
+}
+
+.event.skipped .icon {
+  color: var(--muted);
+  border: 2px dashed var(--border);
+}
 
 .event.skipped { opacity: 0.65; }
 
