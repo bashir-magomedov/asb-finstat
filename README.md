@@ -100,8 +100,9 @@ review rather than asserting accounting validation.
 
 ## Quickstart
 
-Once set up (see below), just run `.\startapp.ps1` from the repo root — it starts
-both servers in their own windows and skips anything already running.
+Once set up (see below), just run `.\startapp.ps1` (Windows) or `./startapp.sh`
+(mac/linux) from the repo root — it starts both servers and skips anything already
+running. The shell version logs to `logs/backend.log` and `logs/frontend.log`.
 
 ### Backend (Python 3.13, FastAPI)
 
