@@ -216,7 +216,8 @@ export default function App() {
 
   useEffect(() => {
     if (events.length === 0) return
-    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
+    // instant, after paint - smooth scrolling gets cancelled by rapid successive events
+    requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight))
   }, [events])
 
   const selectCompany = (c: Company) => {
@@ -233,15 +234,17 @@ export default function App() {
     !events.some((e) => e.step === 'pipeline' && (e.status === 'done' || e.status === 'error'))
   const mood: Mood = !connected ? 'sad' : searching ? 'curious' : pipelineActive ? 'busy' : 'happy'
 
+  // a "running" row is only live while it's the latest event of its step and the
+  // pipeline is still going - older ones are progress log lines, not active work
+  const lastEventOfStep = new Map<string, number>()
+  events.forEach((e, i) => lastEventOfStep.set(e.step, i))
+
   return (
     <div className="app">
       <header>
         <div className="brand">
-          <span className="logo">ASB</span>
-          <div>
-            <h1>Finstat</h1>
-            <span className="team">team Friendly Strangers</span>
-          </div>
+          <h1>ASB Finstat</h1>
+          <span className="team">{'// team: friendly_strangers'}</span>
         </div>
       </header>
 
@@ -304,13 +307,17 @@ export default function App() {
             <span className="sub">agent activity</span>
           </h2>
           <ol>
-            {events.map((e, i) => (
-              <li key={i} className={`event ${e.status}`}>
-                <span className="icon">{STATUS_ICONS[e.status]}</span>
-                <span className="step">{STEP_LABELS[e.step] ?? e.step}</span>
-                <span className="msg">{e.message}</span>
-              </li>
-            ))}
+            {events.map((e, i) => {
+              const settled =
+                e.status === 'running' && (lastEventOfStep.get(e.step) !== i || !pipelineActive)
+              return (
+                <li key={i} className={`event ${settled ? 'settled' : e.status}`}>
+                  <span className="icon">{STATUS_ICONS[e.status]}</span>
+                  <span className="step">{STEP_LABELS[e.step] ?? e.step}</span>
+                  <span className="msg">{e.message}</span>
+                </li>
+              )
+            })}
           </ol>
         </section>
       )}

@@ -37,39 +37,49 @@ body {
 
 header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   margin-bottom: 2rem;
 }
 
 .brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.85rem;
-}
-
-.logo {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.85rem;
-  letter-spacing: 0.02em;
-  box-shadow: 0 6px 24px rgba(124, 92, 255, 0.35);
+  gap: 0.5rem;
+  text-align: center;
 }
 
 .brand h1 {
-  font-size: 1.45rem;
-  line-height: 1.1;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 3.4rem;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: #57b6ff;
+  text-shadow:
+    0 0 12px rgba(87, 182, 255, 0.55),
+    0 0 36px rgba(87, 182, 255, 0.25);
+  /* robotron-style horizontal slices through the letters */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0 40%, transparent 40% 45%,
+    #000 45% 66%, transparent 66% 70%,
+    #000 70% 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0 40%, transparent 40% 45%,
+    #000 45% 66%, transparent 66% 70%,
+    #000 70% 100%
+  );
 }
 
 .team {
-  color: var(--muted);
-  font-size: 0.82rem;
+  font-family: 'Cascadia Code', 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
+  color: #6a9955;
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
 }
 
 /* ---------- robot companion ---------- */
@@ -512,6 +522,14 @@ input:disabled {
 .event.skipped .icon {
   color: var(--muted);
   border: 2px dashed var(--border);
+}
+
+/* an old "running" row whose step has moved on - plain log line, no pulsing */
+.event.settled { opacity: 0.7; }
+
+.event.settled .icon {
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .event.skipped { opacity: 0.65; }
