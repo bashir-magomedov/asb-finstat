@@ -63,7 +63,7 @@ class ExtractionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_plain_prose_is_evidence_not_a_recovered_table(self):
         report = self.root / "narrative.txt"
-        report.write_text("Our balance sheet remains strong.\nWe discuss performance here.", encoding="utf-8")
+        report.write_text("Balance sheet\nWe discuss performance here.", encoding="utf-8")
         payload = await extract_statements(report, AsyncMock())
         balance = payload["statements"]["Balance Sheet"]
         self.assertFalse(balance["found"])
@@ -93,8 +93,42 @@ class ExtractionTests(unittest.IsolatedAsyncioTestCase):
 
 
 class LocatorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_title_with_numeric_table_wins_over_title_only(self):
+        result = await Locator("unused", use_llm=False).locate([
+            "Consolidated income statement 2025 vs 2024\nSee the financial statements below.",
+            "Consolidated income statement\nRevenue  100  90\nProfit  20  10",
+            "Notes to the consolidated financial statements\n"
+            "Consolidated income statement\nAdjusting items  200  190",
+        ])
+        self.assertEqual(result["IncomeStatement"], [2])
+
+    async def test_primary_group_titles_win_over_accounting_notes_and_parent(self):
+        pages = [
+            "Group income statement\nRevenue  100  90\nProfit  20  10",
+            "Group balance sheet\nTotal assets  100  90\nNet assets  20  10",
+            "Group cash flow statement\nOperating activities  100  90\nCash  20  10",
+            "Notes to the Group financial statements continued\n"
+            "recognised immediately in the Group income statement.\n"
+            "The consolidated cash flow statement includes these transactions.\n"
+            "The consolidated balance sheet records the amounts.",
+            "Notes to the Group financial statements\nGroup income statement\nAdjusting items",
+            "Parent Company balance sheet\nTotal assets  80  70\nNet assets  10  5",
+            "Group cash flow statement\nThe table below shows the impact of adjusting items.",
+        ]
+        self.assertEqual(await Locator("unused", use_llm=False).locate(pages), {
+            "IncomeStatement": [1], "Balance Sheet": [2], "CashFlow": [3],
+        })
+
+    async def test_accounting_prose_does_not_qualify_as_a_heading(self):
+        result = await Locator("unused", use_llm=False).locate([
+            "recognised immediately in the Group income statement.",
+            "Our balance sheet remains strong.",
+            "The consolidated cash flow statement includes these transactions.",
+        ])
+        self.assertEqual(result, {name: [] for name in NAMES})
+
     async def test_llm_can_reject_a_heuristic_table(self):
-        pages = ["Cash flow is discussed here. No table is present."]
+        pages = ["Cash flow statement\nNo table is present."]
         with patch.object(settings, "openrouter_api_key", "test"), \
              patch("app.pipeline.statement_extractor.chat_json", new_callable=AsyncMock,
                    return_value={name: [] for name in NAMES}) as ai:
@@ -110,6 +144,18 @@ class LocatorTests(unittest.IsolatedAsyncioTestCase):
             result = await locator.locate(["Consolidated cash flow statement"])
         self.assertEqual(result["CashFlow"], [1])
         self.assertIn("heuristic", locator.warnings[0])
+
+    async def test_separate_comprehensive_income_is_not_a_continuation(self):
+        locator = Locator("test-model")
+        with patch.object(settings, "openrouter_api_key", "test"), \
+             patch("app.pipeline.statement_extractor.chat_json", new_callable=AsyncMock,
+                   return_value={"CashFlow": [], "Balance Sheet": [], "IncomeStatement": [1, 2]}):
+            result = await locator.locate([
+                "Group income statement\nRevenue  100  90",
+                "Group statement of comprehensive income/(loss)\nOther comprehensive income  20  10",
+            ])
+        self.assertEqual(result["IncomeStatement"], [1])
+        self.assertTrue(locator.warnings)
 
     async def test_cancellation_does_not_fall_back_to_heuristics(self):
         with patch.object(settings, "openrouter_api_key", "test"), \
@@ -134,6 +180,40 @@ class ReaderWriterTests(unittest.TestCase):
             doc.save(pdf)
         return pdf
 
+    def test_partial_numeric_grid_retains_labels_and_comparatives(self):
+        self.check_partial_grid(merged=False)
+
+    def test_merged_grid_retains_labels_and_comparatives_on_the_same_row(self):
+        self.check_partial_grid(merged=True)
+
+    def check_partial_grid(self, merged):
+        pdf = self.root / "partial-grid.pdf"
+        with pymupdf.open() as doc:
+            page = doc.new_page()
+            page.insert_text((50, 50), "Group income statement")
+            for y, label, current, previous in (
+                (95, "", "2025", "2024"),
+                (115, "Revenue", "100", "90"),
+                (135, "Operating profit", "20", "10"),
+                (155, "Net profit", "15", "8"),
+            ):
+                page.insert_text((50, y), label)
+                page.insert_text((310, y), current)
+                page.insert_text((380, y), previous)
+            for x in ((40, 300, 370, 440) if merged else (300, 370, 440)):
+                page.draw_line((x, 80), (x, 160))
+            for y in (80, 100, 120, 140, 160):
+                left = 40 if merged and y != 120 else 300
+                right = 370 if merged and y == 120 else 440
+                page.draw_line((left, y), (right, y))
+            doc.save(pdf)
+        evidence = EvidenceReader("off").read(pdf)
+        with pymupdf.open(pdf) as doc:
+            result = TableExtractor().extract(doc, evidence, "IncomeStatement", [1])
+        revenue = next((row for row in result.rows if "Revenue" in row), [])
+        self.assertIn("100", revenue, result.rows)
+        self.assertIn("90", revenue, result.rows)
+
     def test_ocr_text_is_used_by_table_extraction(self):
         pdf = self.scanned_pdf()
         with patch("app.pipeline.statement_extractor.shutil.which", return_value="tesseract"), \
@@ -149,7 +229,8 @@ class ReaderWriterTests(unittest.TestCase):
 
     def test_required_ocr_without_tesseract_fails_explicitly(self):
         pdf = self.scanned_pdf()
-        with patch("app.pipeline.statement_extractor.shutil.which", return_value=None):
+        with patch("app.pipeline.statement_extractor.shutil.which", return_value=None), \
+             patch("app.pipeline.statement_extractor.Path.is_file", return_value=False):
             with self.assertRaisesRegex(RuntimeError, "Tesseract"):
                 EvidenceReader("required").read(pdf)
 

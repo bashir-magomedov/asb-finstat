@@ -125,7 +125,9 @@ function CountrySelect({ value, onChange }: { value: Country | null; onChange: (
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  const list = COUNTRIES.filter((c) => c.name.toLowerCase().includes(filter.trim().toLowerCase()))
+  const list = COUNTRIES.filter((c) =>
+    [c.name, ...(c.aliases ?? [])].some((name) => name.toLowerCase().includes(filter.trim().toLowerCase())),
+  )
 
   return (
     <div className="country-select" ref={ref}>

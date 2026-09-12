@@ -1,4 +1,4 @@
-export type Country = { code: string; name: string }
+export type Country = { code: string; name: string; aliases?: string[] }
 
 // Flag images (emoji flags don't render on Windows browsers)
 export const flagUrl = (code: string) => `https://flagcdn.com/w40/${code}.png`
@@ -33,7 +33,7 @@ export const COUNTRIES: Country[] = [
   { code: 'pt', name: 'Portugal' },
   { code: 'qa', name: 'Qatar' },
   { code: 'ru', name: 'Russia' },
-  { code: 'sa', name: 'Saudi Arabia' },
+  { code: 'sa', name: 'Saudi Arabia', aliases: ['KSA', 'Kingdom of Saudi Arabia'] },
   { code: 'sg', name: 'Singapore' },
   { code: 'za', name: 'South Africa' },
   { code: 'kr', name: 'South Korea' },
@@ -41,7 +41,7 @@ export const COUNTRIES: Country[] = [
   { code: 'se', name: 'Sweden' },
   { code: 'ch', name: 'Switzerland' },
   { code: 'tr', name: 'Turkey' },
-  { code: 'ae', name: 'United Arab Emirates' },
+  { code: 'ae', name: 'United Arab Emirates', aliases: ['UAE'] },
   { code: 'gb', name: 'United Kingdom' },
   { code: 'us', name: 'United States' },
 ]

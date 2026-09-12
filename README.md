@@ -56,7 +56,7 @@ its own model, configurable via `backend/.env` (defaults in `backend/app/config.
 | 1 | Company typeahead (last-resort fallback)| `backend/app/pipeline/company_search.py` | `MODEL_COMPANY_SEARCH` | —      |
 | 2 | Find + download statement PDFs | `backend/app/pipeline/find_statements.py` | `MODEL_FIND_STATEMENTS` | — |
 | 3 | Language check   | `backend/app/pipeline/language_check.py` | `MODEL_LANGUAGE_CHECK` | **Adel** |
-| 4 | Translate to English | `backend/app/pipeline/translate.py` (**stub**) | `MODEL_TRANSLATE` | **Adel** |
+| 4 | Translate to English | `backend/app/pipeline/translate.py` | Google Translate / MyMemory (no key) | **Adel** |
 | 5 | Locate and extract financial statements | `backend/app/pipeline/extract.py` | `MODEL_EXTRACT` | **Sophie** |
 
 Steps 2–5 are orchestrated by `backend/app/pipeline/runner.py`. Downloaded PDFs land
@@ -94,7 +94,7 @@ must be installed separately and available on PATH for scanned-page OCR. Ordinar
 PDFs do not need it. The adapter also accepts UTF-8 `.txt` output from the translation
 step, retaining warnings when columns are inferred from OCR or text spacing.
 
-Translation is still Adel's stub; current statement-heading matching expects English.
+Adel's v2 translator is integrated in `pdf_translation.py`, with `translate.py` emitting progress and returning English UTF-8 text with page boundaries for extraction. It uses Google Translate with MyMemory fallback, without a new API key. Sample PDFs live in `backend/tests/fixtures/translation/inputs/`.
 Extraction output includes source pages, currency/scale, footnotes and warnings for
 review rather than asserting accounting validation.
 
@@ -166,7 +166,7 @@ Backend tests use mocked HTTP responses and do not require keys or spend AI cred
 
 ## Pipeline step contracts
 
-Translation (#4) remains a stub; language check and extraction are integrated. Contracts:
+Language check, translation and extraction are integrated. Contracts:
 
 - **Adel (#3)** — `language_check.py`: `async check_language(path, emit) -> dict`.
   Returns `{"language": "...", "is_english": bool}`; the runner routes non-English
@@ -175,8 +175,9 @@ Translation (#4) remains a stub; language check and extraction are integrated. C
   `MODEL_LANGUAGE_CHECK` names the language. PDFs with no extractable text are
   reported and treated as English.
 - **Adel (#4)** — `translate.py`: `async translate_pdf(path, language, emit) -> Path`.
-  Take the non-English PDF, return the path to the English version. Use
-  `settings.model_translate` with `app.openrouter.chat`/`chat_json`.
+  Reads the non-English PDF and returns an English `.txt` path, preserving page
+  boundaries. Uses Adel's Google Translate / MyMemory engine in `pdf_translation.py`;
+  `MODEL_TRANSLATE` is not used by this implementation. Existing language detection is unchanged.
 - **Sophie (#5)** — `extract.py`: `async extract_statements(path, emit) -> dict`.
   Takes an English PDF or text report. Returns `{source_pdf, statements,
   missing_statements, warnings, artifacts}`. Statement keys preserve her original
