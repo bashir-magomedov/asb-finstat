@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,6 +21,9 @@ class Settings(BaseSettings):
     model_extract: str = "anthropic/claude-sonnet-4.5"     # AI call #5 (Sophie)
 
     download_dir: Path = Path("data/downloads")
+    extraction_dir: Path = Path("data/extractions")
+    extract_ocr_mode: Literal["auto", "off", "required"] = "auto"
+    extract_use_llm: bool = True
 
 
 settings = Settings()

@@ -7,6 +7,7 @@ export default defineConfig({
     proxy: {
       // Frontend talks to ws://localhost:5173/ws, Vite proxies to the FastAPI backend
       '/ws': { target: 'ws://localhost:8000', ws: true },
+      '/artifacts': { target: 'http://localhost:8000' },
     },
   },
 })

@@ -57,10 +57,46 @@ its own model, configurable via `backend/.env` (defaults in `backend/app/config.
 | 2 | Find + download statement PDFs | `backend/app/pipeline/find_statements.py` | `MODEL_FIND_STATEMENTS` | — |
 | 3 | Language check   | `backend/app/pipeline/language_check.py` (**stub**) | `MODEL_LANGUAGE_CHECK` | **Adel** |
 | 4 | Translate to English | `backend/app/pipeline/translate.py` (**stub**) | `MODEL_TRANSLATE` | **Adel** |
-| 5 | Extract financial statements | `backend/app/pipeline/extract.py` (**stub**) | `MODEL_EXTRACT` | **Sophie** |
+| 5 | Locate and extract financial statements | `backend/app/pipeline/extract.py` | `MODEL_EXTRACT` | **Sophie** |
 
 Steps 2–5 are orchestrated by `backend/app/pipeline/runner.py`. Downloaded PDFs land
 in `backend/data/downloads/<company-slug>-<identity>/` (git-ignored).
+
+## Financial statement extraction
+
+Sophie's implementation lives in `backend/app/pipeline/statement_extractor.py`.
+The existing `extract_statements(path, emit)` step calls it directly. Her sample
+PDF and original sample outputs live in `backend/tests/fixtures/extraction/`.
+The OpenRouter connection check is available from the backend directory with
+`python -m app.check_openrouter`; it uses the application's shared client and configuration.
+
+The extractor reads PDF text with PyMuPDF, locates statement pages, recovers source
+tables, and writes JSON and Excel. The optional AI call only selects pages through
+the existing OpenRouter client and `MODEL_EXTRACT`; numeric values come from the
+document. If localization is unavailable, it uses heading heuristics and records a
+review warning. Consolidated headings take priority over repeated narrative mentions.
+Missing tables are explicitly listed; plain text evidence is retained separately.
+
+Each extraction writes `report.json` and `report.xlsx` to a unique directory under
+`backend/data/extractions/`. The activity view provides download links. Files are
+served through `/artifacts/<id>/report.json` and `/artifacts/<id>/report.xlsx`;
+the Vite development proxy forwards these requests to the backend.
+
+Configuration in `backend/.env`:
+
+- `EXTRACT_USE_LLM=true` enables AI page localization; set `false` for local-only extraction.
+- `EXTRACT_OCR_MODE=auto` uses Tesseract when available for sparse image pages.
+  `off` skips OCR; `required` fails if a scanned page needs OCR and Tesseract is missing.
+- `EXTRACTION_DIR=data/extractions` controls the output directory.
+
+Python dependencies are included in `backend/requirements.txt`. The Tesseract executable
+must be installed separately and available on PATH for scanned-page OCR. Ordinary text
+PDFs do not need it. The adapter also accepts UTF-8 `.txt` output from the translation
+step, retaining warnings when columns are inferred from OCR or text spacing.
+
+Language detection and translation are still Adel's stubs; current statement-heading
+matching expects English. Extraction output includes source pages, currency/scale,
+footnotes and warnings for review rather than asserting accounting validation.
 
 ## Quickstart
 
@@ -127,9 +163,9 @@ npm run build
 
 Backend tests use mocked HTTP responses and do not require keys or spend AI credits.
 
-## Plugging in your step (Adel / Sophie)
+## Pipeline step contracts
 
-Your file is a stub with the exact contract in its docstring. In short:
+Adel's files remain stubs; Sophie's extraction step is integrated. Contracts:
 
 - **Adel (#3)** — `language_check.py`: `async check_language(path, emit) -> dict`.
   Return `{"language": "...", "is_english": bool}`; the runner routes non-English
@@ -139,7 +175,10 @@ Your file is a stub with the exact contract in its docstring. In short:
   Take the non-English PDF, return the path to the English version. Use
   `settings.model_translate` with `app.openrouter.chat`/`chat_json`.
 - **Sophie (#5)** — `extract.py`: `async extract_statements(path, emit) -> dict`.
-  Take an English report, return the structured statements. Use `settings.model_extract`.
+  Takes an English PDF or text report. Returns `{source_pdf, statements,
+  missing_statements, warnings, artifacts}`. Statement keys preserve her original
+  `CashFlow`, `Balance Sheet`, and `IncomeStatement` schema. This payload appears
+  in the extraction-done event and in each final pipeline result's `statements` field.
 
 Call `await emit("<your-step>", "running"|"done"|"error", "human-readable message", optional_data_dict)`
 as you go — it streams straight to the UI. No other files need to change.

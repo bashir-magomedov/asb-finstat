@@ -1,7 +1,10 @@
 import asyncio
+import re
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 
+from .config import settings
 from .pipeline.company_search import search_companies
 from .pipeline.runner import run_pipeline
 
@@ -11,6 +14,18 @@ app = FastAPI(title="asb-finstat")
 @app.get("/")
 async def health():
     return {"ok": True}
+
+
+@app.get("/artifacts/{artifact_id}/{filename}")
+async def extraction_artifact(artifact_id: str, filename: str):
+    if not re.fullmatch(r"[a-f0-9]{32}", artifact_id) or filename not in {"report.json", "report.xlsx"}:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    root = settings.extraction_dir.resolve()
+    path = (root / artifact_id / filename).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    media_type = "application/json" if filename.endswith(".json") else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return FileResponse(path, filename=filename, media_type=media_type)
 
 
 @app.websocket("/ws")

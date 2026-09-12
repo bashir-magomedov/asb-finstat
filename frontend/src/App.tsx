@@ -26,7 +26,13 @@ type StepUpdate = {
   step: string
   status: 'running' | 'done' | 'error' | 'skipped'
   message: string
-  data?: unknown
+  data?: {
+    source_pdf?: string
+    artifacts?: { json: string; xlsx: string }
+    missing_statements?: string[]
+    warnings?: string[]
+    [key: string]: unknown
+  } | null
 }
 type CompaniesMsg = { type: 'companies'; requestId: number; companies: Company[]; error?: string; warnings?: string[] }
 type ServerMessage = StepUpdate | CompaniesMsg
@@ -368,6 +374,20 @@ export default function App() {
               )
             })}
           </ol>
+          {events.filter((event) => event.step === 'extract' && event.status === 'done' && event.data?.artifacts).map((event, index) => (
+            <div className="extraction-result" key={index}>
+              <strong>{event.data?.source_pdf}</strong>
+              <div className="artifact-links">
+                <a href={event.data!.artifacts!.xlsx} download>Download Excel</a>
+                <a href={event.data!.artifacts!.json} download>Download JSON</a>
+              </div>
+              {!!event.data?.missing_statements?.length && (
+                <p className="hint">Tables not recovered: {event.data.missing_statements.join(', ')}</p>
+              )}
+              {event.data?.warnings?.map((warning, i) => <p className="hint" key={i}>{warning}</p>)}
+              <p className="hint">Review the source pages and extraction notes in the files.</p>
+            </div>
+          ))}
         </section>
       )}
     </div>
