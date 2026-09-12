@@ -55,7 +55,7 @@ its own model, configurable via `backend/.env` (defaults in `backend/app/config.
 |---|------------------|------------------------------------------|------------------------|--------|
 | 1 | Company typeahead (last-resort fallback)| `backend/app/pipeline/company_search.py` | `MODEL_COMPANY_SEARCH` | —      |
 | 2 | Find + download statement PDFs | `backend/app/pipeline/find_statements.py` | `MODEL_FIND_STATEMENTS` | — |
-| 3 | Language check   | `backend/app/pipeline/language_check.py` (**stub**) | `MODEL_LANGUAGE_CHECK` | **Adel** |
+| 3 | Language check   | `backend/app/pipeline/language_check.py` | `MODEL_LANGUAGE_CHECK` | **Adel** |
 | 4 | Translate to English | `backend/app/pipeline/translate.py` (**stub**) | `MODEL_TRANSLATE` | **Adel** |
 | 5 | Locate and extract financial statements | `backend/app/pipeline/extract.py` | `MODEL_EXTRACT` | **Sophie** |
 
@@ -94,9 +94,9 @@ must be installed separately and available on PATH for scanned-page OCR. Ordinar
 PDFs do not need it. The adapter also accepts UTF-8 `.txt` output from the translation
 step, retaining warnings when columns are inferred from OCR or text spacing.
 
-Language detection and translation are still Adel's stubs; current statement-heading
-matching expects English. Extraction output includes source pages, currency/scale,
-footnotes and warnings for review rather than asserting accounting validation.
+Translation is still Adel's stub; current statement-heading matching expects English.
+Extraction output includes source pages, currency/scale, footnotes and warnings for
+review rather than asserting accounting validation.
 
 ## Quickstart
 
@@ -165,12 +165,14 @@ Backend tests use mocked HTTP responses and do not require keys or spend AI cred
 
 ## Pipeline step contracts
 
-Adel's files remain stubs; Sophie's extraction step is integrated. Contracts:
+Translation (#4) remains a stub; language check and extraction are integrated. Contracts:
 
 - **Adel (#3)** — `language_check.py`: `async check_language(path, emit) -> dict`.
-  Return `{"language": "...", "is_english": bool}`; the runner routes non-English
-  files to #4, English ones straight to #5. pypdf + cryptography are installed for
-  reading PDF text (Siemens' PDFs are AES-encrypted, cryptography handles that).
+  Returns `{"language": "...", "is_english": bool}`; the runner routes non-English
+  files to #4, English ones straight to #5. A basic version is in place: pypdf reads
+  the first 3 pages (cryptography handles Siemens' AES-encrypted PDFs) and
+  `MODEL_LANGUAGE_CHECK` names the language. PDFs with no extractable text are
+  reported and treated as English.
 - **Adel (#4)** — `translate.py`: `async translate_pdf(path, language, emit) -> Path`.
   Take the non-English PDF, return the path to the English version. Use
   `settings.model_translate` with `app.openrouter.chat`/`chat_json`.
